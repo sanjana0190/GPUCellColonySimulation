@@ -1,19 +1,24 @@
-export function createGridVertices(size: number, divisions: number): Float32Array{
+export function createGridVertices(size: number): Float32Array{
     const vertices: number[] = [];
-    const step = size/divisions;
-    const half = size/2;
+    const step = 2/size;
 
-    //vertical lines
-    for(let i=0;i<=divisions;i++){
-        const x = -half + i * step;
+    for(let row = 0;row<size;row++){
+        for(let col = 0;col<size;col++){
+            const x = -1+col*step;
+            const y = -1+row*step;
 
-        vertices.push(x,-half);
-        vertices.push(x,half);
-    }
-    for(let j=0;j<=divisions;j++){
-        const y = -half + j * step;
-        vertices.push(-half,y);
-        vertices.push(half,y);
+            const x2 = x+step;
+            const y2 = y+step;
+
+            vertices.push(
+                x, y,
+                x2, y,
+                x2, y2,
+                x, y,
+                x2, y2,
+                x, y2,
+            );
+        }
     }
     return new Float32Array(vertices)
 }

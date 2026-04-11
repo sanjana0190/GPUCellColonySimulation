@@ -2,13 +2,15 @@ import { getCanvas } from './utils/canvas';
 import { initWebGPU } from './gpu/initWebGPU';
 import { createGridVertices } from './gpu/grid';
 import { createPipeline } from './gpu/pipeline';
+import { createCellStateBuffer } from "./gpu/cellBuffer";
 
 async function main(){
   const canvas = getCanvas();
   const { device, context, format } = await initWebGPU(canvas);
+  const gridSize = 32;
 
   const pipeline = createPipeline(device,format); //creating pipeline
-  const vertices = createGridVertices(1.8,20); //creating grid vertices
+  const vertices = createGridVertices(gridSize); //creating grid vertices
 
   const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
@@ -17,6 +19,18 @@ async function main(){
 
   device.queue.writeBuffer(vertexBuffer,0,vertices as Float32Array<ArrayBuffer>);
 
+  const {buffer: cellBuffer} = createCellStateBuffer(device, gridSize);
+
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries:[
+      {
+        binding:0,
+        resource: { buffer: cellBuffer },
+      },
+    ],
+  });
+  
   const encoder = device.createCommandEncoder();
   const textureView = context.getCurrentTexture().createView();
   const renderPass = encoder.beginRenderPass({
@@ -28,8 +42,9 @@ async function main(){
     },],
   });
   renderPass.setPipeline(pipeline);
-  renderPass.setVertexBuffer(0,vertexBuffer);
-  renderPass.draw(vertices.length/2);
+  renderPass.setBindGroup(0, bindGroup);
+  renderPass.setVertexBuffer(0, vertexBuffer);
+  renderPass.draw(vertices.length / 2);
   renderPass.end();
 
   device.queue.submit([encoder.finish()]);
