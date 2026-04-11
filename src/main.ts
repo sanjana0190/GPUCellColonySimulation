@@ -21,7 +21,7 @@ async function main() {
   device.queue.writeBuffer(vertexBuffer, 0, vertices as Float32Array<ArrayBuffer>);
 
   let { bufferA, bufferB } = createCellStateBuffer(device, gridSize);
-  const computePipeline = createComputePipeline(device);
+  const computePipeline = createComputePipeline(device, gridSize);
 
   const workgroupsX = Math.ceil(gridSize / 8);
   const workgroupsY = Math.ceil(gridSize / 8);
