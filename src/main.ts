@@ -20,9 +20,11 @@ async function main() {
 
   device.queue.writeBuffer(vertexBuffer, 0, vertices as Float32Array<ArrayBuffer>);
 
-  let { bufferA, bufferB } = createCellStateBuffer(device, gridSize);
-  let currentBuffer = bufferA;
-  let nextBuffer = bufferB;
+  const { stateA, stateB, ageA, ageB } = createCellStateBuffer(device, gridSize);
+  let currentState = stateA;
+  let nextState = stateB;
+  let currentAge = ageA;
+  let nextAge = ageB;
 
   const computePipeline = createComputePipeline(device, gridSize);
 
@@ -38,8 +40,10 @@ async function main() {
     const computeBindGroup = device.createBindGroup({
       layout: computeBindGroupLayout,
       entries: [
-        { binding: 0, resource: { buffer: currentBuffer } },
-        { binding: 1, resource: { buffer: nextBuffer } },
+        { binding: 0, resource: { buffer: currentState } },
+        { binding: 1, resource: { buffer: nextState } },
+        { binding: 2, resource: { buffer: currentAge } },
+        { binding: 3, resource: { buffer: nextAge } },
       ],
     });
 
@@ -63,7 +67,7 @@ async function main() {
 
     const renderBindGroup = device.createBindGroup({
       layout: renderBindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: nextBuffer } }],
+      entries: [{ binding: 0, resource: { buffer: nextState } }],
     });
 
     renderPass.setPipeline(renderPipeline);
@@ -74,7 +78,8 @@ async function main() {
 
     device.queue.submit([encoder.finish()]);
 
-    [currentBuffer, nextBuffer] = [nextBuffer, currentBuffer];
+    [currentState, nextState] = [nextState, currentState];
+    [currentAge, nextAge] = [nextAge, currentAge];
     requestAnimationFrame(frame);
   }
 
