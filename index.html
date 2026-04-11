@@ -5,9 +5,40 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebGPU Cell Colony Simulation</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #0a0a0f;
+      }
+
+      #controls {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(20, 20, 30, 0.8);
+        padding: 10px;
+        border-radius: 8px;
+        color: white;
+        font-family: sans-serif;
+      }
+
+      button {
+        margin-right: 8px;
+      }
+    </style>
   </head>
   <body>
-    <canvas id="gpu-canvas">
+    <canvas id="gpu-canvas"></canvas>
+    <div id="controls">
+      <button id="toggle">Pause</button>
+      <button id="reset">Reset</button>
+
+      <label>
+        Speed
+        <input id="speed" type="range" min="10" max="500" value="100" />
+      </label>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

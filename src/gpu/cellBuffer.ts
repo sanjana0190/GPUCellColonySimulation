@@ -1,7 +1,4 @@
-export function createCellStateBuffer(
-    device: GPUDevice,
-    gridSize: number
-){
+export function createCellStateBuffer(device: GPUDevice, gridSize: number) {
     const cellCount = gridSize * gridSize;
 
     const cellStates = new Uint32Array(cellCount);
@@ -31,3 +28,5 @@ export function createCellStateBuffer(
         ageB: createBuffer(new Uint32Array(cellCount)),
     };
 }
+
+export const createCellBuffers = createCellStateBuffer;
