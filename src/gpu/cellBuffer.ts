@@ -8,17 +8,19 @@ export function createCellStateBuffer(
         cellStates[i] = Math.random() > 0.5 ? 1 : 0;
     }
 
+    const usage = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
+        
     const bufferA  = device.createBuffer({
         size: cellStates.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        usage: usage,
     });
 
     const bufferB = device.createBuffer({
         size: cellStates.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        usage: usage,
     });
 
     device.queue.writeBuffer(bufferA,0,cellStates);
 
-    return {bufferA, bufferB, cellCount};
+    return {bufferA, bufferB};
 }

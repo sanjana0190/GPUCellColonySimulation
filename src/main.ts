@@ -21,6 +21,9 @@ async function main() {
   device.queue.writeBuffer(vertexBuffer, 0, vertices as Float32Array<ArrayBuffer>);
 
   let { bufferA, bufferB } = createCellStateBuffer(device, gridSize);
+  let currentBuffer = bufferA;
+  let nextBuffer = bufferB;
+
   const computePipeline = createComputePipeline(device, gridSize);
 
   const workgroupsX = Math.ceil(gridSize / 8);
@@ -35,8 +38,8 @@ async function main() {
     const computeBindGroup = device.createBindGroup({
       layout: computeBindGroupLayout,
       entries: [
-        { binding: 0, resource: { buffer: bufferA } },
-        { binding: 1, resource: { buffer: bufferB } },
+        { binding: 0, resource: { buffer: currentBuffer } },
+        { binding: 1, resource: { buffer: nextBuffer } },
       ],
     });
 
@@ -60,7 +63,7 @@ async function main() {
 
     const renderBindGroup = device.createBindGroup({
       layout: renderBindGroupLayout,
-      entries: [{ binding: 0, resource: { buffer: bufferB } }],
+      entries: [{ binding: 0, resource: { buffer: nextBuffer } }],
     });
 
     renderPass.setPipeline(renderPipeline);
@@ -71,7 +74,7 @@ async function main() {
 
     device.queue.submit([encoder.finish()]);
 
-    [bufferA, bufferB] = [bufferB, bufferA];
+    [currentBuffer, nextBuffer] = [nextBuffer, currentBuffer];
     requestAnimationFrame(frame);
   }
 
