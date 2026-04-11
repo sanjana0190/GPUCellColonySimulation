@@ -2,51 +2,80 @@ import { getCanvas } from './utils/canvas';
 import { initWebGPU } from './gpu/initWebGPU';
 import { createGridVertices } from './gpu/grid';
 import { createPipeline } from './gpu/pipeline';
-import { createCellStateBuffer } from "./gpu/cellBuffer";
+import { createCellStateBuffer } from './gpu/cellBuffer';
+import { createComputePipeline } from './gpu/compute';
 
-async function main(){
+async function main() {
   const canvas = getCanvas();
   const { device, context, format } = await initWebGPU(canvas);
   const gridSize = 32;
 
-  const pipeline = createPipeline(device,format); //creating pipeline
-  const vertices = createGridVertices(gridSize); //creating grid vertices
+  const renderPipeline = createPipeline(device, format);
+  const vertices = createGridVertices(gridSize);
 
   const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
 
-  device.queue.writeBuffer(vertexBuffer,0,vertices as Float32Array<ArrayBuffer>);
+  device.queue.writeBuffer(vertexBuffer, 0, vertices as Float32Array<ArrayBuffer>);
 
-  const {buffer: cellBuffer} = createCellStateBuffer(device, gridSize);
+  let { bufferA, bufferB } = createCellStateBuffer(device, gridSize);
+  const computePipeline = createComputePipeline(device);
 
-  const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries:[
-      {
-        binding:0,
-        resource: { buffer: cellBuffer },
-      },
-    ],
-  });
-  
-  const encoder = device.createCommandEncoder();
-  const textureView = context.getCurrentTexture().createView();
-  const renderPass = encoder.beginRenderPass({
-    colorAttachments:[{
-      view: textureView,
-      clearValue:{r:0.1, g:0.1, b:0.2,a: 1.0},
-      loadOp: "clear",
-      storeOp: "store",
-    },],
-  });
-  renderPass.setPipeline(pipeline);
-  renderPass.setBindGroup(0, bindGroup);
-  renderPass.setVertexBuffer(0, vertexBuffer);
-  renderPass.draw(vertices.length / 2);
-  renderPass.end();
+  const workgroupsX = Math.ceil(gridSize / 8);
+  const workgroupsY = Math.ceil(gridSize / 8);
 
-  device.queue.submit([encoder.finish()]);
+  const renderBindGroupLayout = renderPipeline.getBindGroupLayout(0);
+  const computeBindGroupLayout = computePipeline.getBindGroupLayout(0);
+
+  function frame() {
+    const encoder = device.createCommandEncoder();
+
+    const computeBindGroup = device.createBindGroup({
+      layout: computeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: bufferA } },
+        { binding: 1, resource: { buffer: bufferB } },
+      ],
+    });
+
+    const computePass = encoder.beginComputePass();
+    computePass.setPipeline(computePipeline);
+    computePass.setBindGroup(0, computeBindGroup);
+    computePass.dispatchWorkgroups(workgroupsX, workgroupsY);
+    computePass.end();
+
+    const textureView = context.getCurrentTexture().createView();
+    const renderPass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: textureView,
+          clearValue: { r: 0.1, g: 0.1, b: 0.2, a: 1.0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+
+    const renderBindGroup = device.createBindGroup({
+      layout: renderBindGroupLayout,
+      entries: [{ binding: 0, resource: { buffer: bufferB } }],
+    });
+
+    renderPass.setPipeline(renderPipeline);
+    renderPass.setVertexBuffer(0, vertexBuffer);
+    renderPass.setBindGroup(0, renderBindGroup);
+    renderPass.draw(vertices.length / 2);
+    renderPass.end();
+
+    device.queue.submit([encoder.finish()]);
+
+    [bufferA, bufferB] = [bufferB, bufferA];
+    requestAnimationFrame(frame);
+  }
+
+  frame();
 }
+
 main();
