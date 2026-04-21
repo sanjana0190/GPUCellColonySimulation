@@ -7,9 +7,15 @@ import { createComputePipeline } from './gpu/compute';
 import {
   createSimulationBindGroups,
   type SimulationBindGroups,
+  type CellTextures,
 } from './gpu/simulationBindGroups';
+import { loadTextureFromUrl, createLinearSampler } from './gpu/texture';
 import { setupControls } from './ui/controls';
 import { setupMouseInteraction } from './interaction/mouse';
+
+import deadCellUrl from './assets/Dead Cell.png?url';
+import livingCellUrl from './assets/Living Cell.png?url';
+import dividingCellUrl from './assets/Dividing Cell.png?url';
 
 function destroyGridBuffers(b: GridBuffers) {
   b.stateA.destroy();
@@ -24,12 +30,38 @@ async function main() {
   const gridSize = 32;
   const workgroupsPerDim = Math.ceil(gridSize / 8);
 
+  const [texDead, texAlive, texDividing] = await Promise.all([
+    loadTextureFromUrl(device, deadCellUrl),
+    loadTextureFromUrl(device, livingCellUrl),
+    loadTextureFromUrl(device, dividingCellUrl),
+  ]);
+  const cellTextures: CellTextures = {
+    dead: texDead,
+    alive: texAlive,
+    dividing: texDividing,
+    sampler: createLinearSampler(device),
+  };
+
   const cellReadScratch = device.createBuffer({
     size: 4,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
 
   const controls = setupControls();
+
+  const paletteBuffer = device.createBuffer({
+    size: 12 * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+
+  function uploadPalette() {
+    const data = controls.readPalette();
+    device.queue.writeBuffer(paletteBuffer, 0, data as Float32Array<ArrayBuffer>);
+  }
+
+  controls.onPaletteChange(uploadPalette);
+  uploadPalette();
+
   let lastTime = 0;
   let accumulator = 0;
   let simulationStep = 100;
@@ -55,6 +87,8 @@ async function main() {
     computeLayout,
     renderLayout,
     grid,
+    paletteBuffer,
+    cellTextures,
   );
 
   function rebuildAfterNewGrid() {
@@ -63,6 +97,8 @@ async function main() {
       computeLayout,
       renderLayout,
       grid,
+      paletteBuffer,
+      cellTextures,
     );
     resultInA = true;
   }
@@ -156,7 +192,7 @@ async function main() {
       0,
       resultInA ? bindGroups.renderA : bindGroups.renderB,
     );
-    renderPass.draw(vertices.length / 2);
+    renderPass.draw(vertices.length / 4);
     renderPass.end();
 
     device.queue.submit([encoder.finish()]);
