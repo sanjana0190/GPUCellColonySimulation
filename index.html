@@ -27,6 +27,7 @@
         margin-right: 8px;
       }
 
+      .control-row,
       .color-row {
         display: flex;
         align-items: center;
@@ -34,8 +35,15 @@
         margin-top: 8px;
       }
 
+      .control-row label,
       .color-row label {
-        min-width: 4.5rem;
+        min-width: 7.5rem;
+        font-size: 0.85rem;
+      }
+
+      .control-row output {
+        min-width: 2rem;
+        text-align: right;
         font-size: 0.85rem;
       }
 
@@ -59,6 +67,33 @@
         Speed
         <input id="speed" type="range" min="10" max="500" value="100" />
       </label>
+
+      <div class="control-row">
+        <label for="initial-cells">Initial cells</label>
+        <input id="initial-cells" type="range" min="0" max="256" value="0" />
+        <output id="initial-cells-value">0</output>
+      </div>
+
+      <div class="control-row">
+        <label for="divide-age">Divide age</label>
+        <input id="divide-age" type="range" min="2" max="30" value="6" />
+        <output id="divide-age-value">6</output>
+      </div>
+      <div class="control-row">
+        <label for="death-age">Death age</label>
+        <input id="death-age" type="range" min="8" max="80" value="30" />
+        <output id="death-age-value">30</output>
+      </div>
+      <div class="control-row">
+        <label for="survival-energy">Min energy</label>
+        <input id="survival-energy" type="range" min="0" max="80" value="15" />
+        <output id="survival-energy-value">15</output>
+      </div>
+      <div class="control-row">
+        <label for="divide-energy">Divide energy</label>
+        <input id="divide-energy" type="range" min="20" max="100" value="70" />
+        <output id="divide-energy-value">70</output>
+      </div>
 
       <div class="color-row">
         <label for="color-dead">Dead</label>

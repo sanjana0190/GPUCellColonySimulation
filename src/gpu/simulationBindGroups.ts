@@ -20,6 +20,7 @@ export function createSimulationBindGroups(
   renderLayout: GPUBindGroupLayout,
   b: GridBuffers,
   paletteBuffer: GPUBuffer,
+  simulationParamsBuffer: GPUBuffer,
   cellTextures: CellTextures,
 ): SimulationBindGroups {
   const { dead, alive, dividing, sampler } = cellTextures;
@@ -33,6 +34,9 @@ export function createSimulationBindGroups(
         { binding: 1, resource: { buffer: b.stateB } },
         { binding: 2, resource: { buffer: b.ageA } },
         { binding: 3, resource: { buffer: b.ageB } },
+        { binding: 4, resource: { buffer: b.energyA } },
+        { binding: 5, resource: { buffer: b.energyB } },
+        { binding: 6, resource: { buffer: simulationParamsBuffer } },
       ],
     }),
     computeBA: device.createBindGroup({
@@ -42,6 +46,9 @@ export function createSimulationBindGroups(
         { binding: 1, resource: { buffer: b.stateA } },
         { binding: 2, resource: { buffer: b.ageB } },
         { binding: 3, resource: { buffer: b.ageA } },
+        { binding: 4, resource: { buffer: b.energyB } },
+        { binding: 5, resource: { buffer: b.energyA } },
+        { binding: 6, resource: { buffer: simulationParamsBuffer } },
       ],
     }),
     renderA: device.createBindGroup({

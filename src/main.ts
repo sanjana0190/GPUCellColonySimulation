@@ -12,24 +12,36 @@ import {
 import { loadTextureFromUrl, createLinearSampler } from './gpu/texture';
 import { setupControls } from './ui/controls';
 import { setupMouseInteraction } from './interaction/mouse';
+import {
+  CELL_STATE,
+  STARTING_AGE,
+  STARTING_ENERGY,
+} from './gpu/cellState';
 
 import deadCellUrl from './assets/Dead Cell.png?url';
 import livingCellUrl from './assets/Living Cell.png?url';
 import dividingCellUrl from './assets/Dividing Cell.png?url';
+
+const GRID_SIZE = 32;
+const WORKGROUP_SIZE = 8;
+const WORKGROUPS_PER_DIM = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
+const PALETTE_BYTES = 12 * 4; // 3 × vec4<f32>
+const SIM_PARAMS_BYTES = 4 * 4; // 4 × u32
 
 function destroyGridBuffers(b: GridBuffers) {
   b.stateA.destroy();
   b.stateB.destroy();
   b.ageA.destroy();
   b.ageB.destroy();
+  b.energyA.destroy();
+  b.energyB.destroy();
 }
 
 async function main() {
   const canvas = getCanvas();
   const { device, context, format } = await initWebGPU(canvas);
-  const gridSize = 32;
-  const workgroupsPerDim = Math.ceil(gridSize / 8);
 
+  // Load cell artwork up-front so the first frame already has textures.
   const [texDead, texAlive, texDividing] = await Promise.all([
     loadTextureFromUrl(device, deadCellUrl),
     loadTextureFromUrl(device, livingCellUrl),
@@ -42,122 +54,107 @@ async function main() {
     sampler: createLinearSampler(device),
   };
 
-  const cellReadScratch = device.createBuffer({
-    size: 4,
-    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-  });
-
   const controls = setupControls();
 
+  // GPU buffers shared between every bind group: palette colours and the four
+  // simulation thresholds the compute shader reads as a uniform.
   const paletteBuffer = device.createBuffer({
-    size: 12 * 4,
+    size: PALETTE_BYTES,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const simulationParamsBuffer = device.createBuffer({
+    size: SIM_PARAMS_BYTES,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
   function uploadPalette() {
     const data = controls.readPalette();
     device.queue.writeBuffer(paletteBuffer, 0, data as Float32Array<ArrayBuffer>);
   }
-
+  function uploadSimulationParams() {
+    const data = controls.readSimulationParams();
+    device.queue.writeBuffer(
+      simulationParamsBuffer,
+      0,
+      data as Uint32Array<ArrayBuffer>,
+    );
+  }
   controls.onPaletteChange(uploadPalette);
+  controls.onSimulationParamsChange(uploadSimulationParams);
   uploadPalette();
+  uploadSimulationParams();
 
-  let lastTime = 0;
-  let accumulator = 0;
-  let simulationStep = 100;
-
+  // Pipelines & vertex data.
   const renderPipeline = createPipeline(device, format);
-  const computePipeline = createComputePipeline(device, gridSize);
-
-  const renderLayout = renderPipeline.getBindGroupLayout(0);
+  const computePipeline = createComputePipeline(device, GRID_SIZE);
   const computeLayout = computePipeline.getBindGroupLayout(0);
+  const renderLayout = renderPipeline.getBindGroupLayout(0);
 
-  const vertices = createGridVertices(gridSize);
+  const vertices = createGridVertices(GRID_SIZE);
   const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   device.queue.writeBuffer(vertexBuffer, 0, vertices as Float32Array<ArrayBuffer>);
 
-  let grid = createCellBuffers(device, gridSize);
-  /** Latest grid data lives in A when true, in B when false (ping-pong). */
-  let resultInA = true;
-  let bindGroups: SimulationBindGroups = createSimulationBindGroups(
-    device,
-    computeLayout,
-    renderLayout,
-    grid,
-    paletteBuffer,
-    cellTextures,
-  );
+  // Ping-pong buffers: one half is read, the other half is written each tick.
+  // `latestIsA` flips after every compute pass so the next pass reads from the
+  // freshly written buffer.
+  let grid = createCellBuffers(device, GRID_SIZE, controls.initialCellCount);
+  let latestIsA = true;
+  let bindGroups: SimulationBindGroups = makeBindGroups();
 
-  function rebuildAfterNewGrid() {
-    bindGroups = createSimulationBindGroups(
+  function makeBindGroups(): SimulationBindGroups {
+    return createSimulationBindGroups(
       device,
       computeLayout,
       renderLayout,
       grid,
       paletteBuffer,
+      simulationParamsBuffer,
       cellTextures,
     );
-    resultInA = true;
   }
 
   controls.onReset(() => {
     destroyGridBuffers(grid);
-    grid = createCellBuffers(device, gridSize);
-    rebuildAfterNewGrid();
+    grid = createCellBuffers(device, GRID_SIZE, controls.initialCellCount);
+    bindGroups = makeBindGroups();
+    latestIsA = true;
   });
 
-  function displayState(): GPUBuffer {
-    return resultInA ? grid.stateA : grid.stateB;
+  // Helpers: pick the "current" half of each ping-pong pair so click handlers
+  // and the renderer always touch the freshest data.
+  const latestState = () => (latestIsA ? grid.stateA : grid.stateB);
+  const latestAge = () => (latestIsA ? grid.ageA : grid.ageB);
+  const latestEnergy = () => (latestIsA ? grid.energyA : grid.energyB);
+
+  // Reusable scratch buffers so we don't allocate on every click.
+  const stateScratch = new Uint32Array([CELL_STATE.alive]);
+  const ageScratch = new Uint32Array([STARTING_AGE]);
+  const energyScratch = new Uint32Array([STARTING_ENERGY]);
+
+  function addCell(row: number, col: number) {
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return;
+    const byteOffset = (row * GRID_SIZE + col) * 4;
+    // queue.writeBuffer is sequenced relative to other queue work, so the
+    // next compute pass always reads what we just wrote here.
+    device.queue.writeBuffer(latestState(), byteOffset, stateScratch as Uint32Array<ArrayBuffer>);
+    device.queue.writeBuffer(latestAge(), byteOffset, ageScratch as Uint32Array<ArrayBuffer>);
+    device.queue.writeBuffer(latestEnergy(), byteOffset, energyScratch as Uint32Array<ArrayBuffer>);
   }
 
-  function displayAge(): GPUBuffer {
-    return resultInA ? grid.ageA : grid.ageB;
-  }
+  setupMouseInteraction(canvas, GRID_SIZE, addCell);
 
-  let toggleQueue = Promise.resolve();
-
-  function toggleCell(row: number, col: number): Promise<void> {
-    if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
-      return Promise.resolve();
-    }
-
-    const index = row * gridSize + col;
-    const byteOffset = index * 4;
-    const stateBuf = displayState();
-    const ageBuf = displayAge();
-
-    const copyEncoder = device.createCommandEncoder();
-    copyEncoder.copyBufferToBuffer(stateBuf, byteOffset, cellReadScratch, 0, 4);
-    device.queue.submit([copyEncoder.finish()]);
-
-    return cellReadScratch.mapAsync(GPUMapMode.READ).then(() => {
-      const prev = new Uint32Array(cellReadScratch.getMappedRange().slice(0))[0];
-      cellReadScratch.unmap();
-
-      const wasAlive = prev === 1 || prev === 2;
-      const nextVal = wasAlive ? 0 : 1;
-      const packed = new Uint32Array(1);
-      packed[0] = nextVal;
-      device.queue.writeBuffer(stateBuf, byteOffset, packed as Uint32Array<ArrayBuffer>);
-      packed[0] = nextVal !== 0 ? 1 : 0;
-      device.queue.writeBuffer(ageBuf, byteOffset, packed as Uint32Array<ArrayBuffer>);
-    });
-  }
-
-  setupMouseInteraction(canvas, gridSize, (row, col) => {
-    toggleQueue = toggleQueue
-      .then(() => toggleCell(row, col))
-      .catch(() => {});
-  });
+  // Animation loop: advance the simulation in fixed-size ticks, then draw.
+  let lastTime = 0;
+  let accumulator = 0;
 
   function frame(time: number) {
     const deltaTime = time - lastTime;
     lastTime = time;
     accumulator += deltaTime;
-    simulationStep = controls.speed;
+    const simulationStep = controls.speed;
 
     const encoder = device.createCommandEncoder();
 
@@ -166,12 +163,12 @@ async function main() {
       computePass.setPipeline(computePipeline);
       computePass.setBindGroup(
         0,
-        resultInA ? bindGroups.computeAB : bindGroups.computeBA,
+        latestIsA ? bindGroups.computeAB : bindGroups.computeBA,
       );
-      computePass.dispatchWorkgroups(workgroupsPerDim, workgroupsPerDim);
+      computePass.dispatchWorkgroups(WORKGROUPS_PER_DIM, WORKGROUPS_PER_DIM);
       computePass.end();
 
-      resultInA = !resultInA;
+      latestIsA = !latestIsA;
       accumulator -= simulationStep;
     }
 
@@ -185,13 +182,9 @@ async function main() {
         },
       ],
     });
-
     renderPass.setPipeline(renderPipeline);
     renderPass.setVertexBuffer(0, vertexBuffer);
-    renderPass.setBindGroup(
-      0,
-      resultInA ? bindGroups.renderA : bindGroups.renderB,
-    );
+    renderPass.setBindGroup(0, latestIsA ? bindGroups.renderA : bindGroups.renderB);
     renderPass.draw(vertices.length / 4);
     renderPass.end();
 
