@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebGPU Cell Colony Simulation</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #0a0a0f;
+      }
+
+      #controls {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(20, 20, 30, 0.8);
+        padding: 10px;
+        border-radius: 8px;
+        color: white;
+        font-family: sans-serif;
+      }
+
+      button {
+        margin-right: 8px;
+      }
+
+      .control-row,
+      .color-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .control-row label,
+      .color-row label {
+        min-width: 7.5rem;
+        font-size: 0.85rem;
+      }
+
+      .control-row output {
+        min-width: 2rem;
+        text-align: right;
+        font-size: 0.85rem;
+      }
+
+      .color-row input[type='color'] {
+        width: 2.25rem;
+        height: 1.75rem;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-DRJjxXUs.js"></script>
+  </head>
+  <body>
+    <canvas id="gpu-canvas"></canvas>
+    <div id="controls">
+      <button id="toggle">Pause</button>
+      <button id="reset">Reset</button>
+
+      <label>
+        Speed
+        <input id="speed" type="range" min="10" max="500" value="100" />
+      </label>
+
+      <div class="control-row">
+        <label for="initial-cells">Initial cells</label>
+        <input id="initial-cells" type="range" min="0" max="256" value="0" />
+        <output id="initial-cells-value">0</output>
+      </div>
+
+      <div class="control-row">
+        <label for="divide-age">Divide age</label>
+        <input id="divide-age" type="range" min="2" max="30" value="6" />
+        <output id="divide-age-value">6</output>
+      </div>
+      <div class="control-row">
+        <label for="death-age">Death age</label>
+        <input id="death-age" type="range" min="8" max="80" value="30" />
+        <output id="death-age-value">30</output>
+      </div>
+      <div class="control-row">
+        <label for="survival-energy">Min energy</label>
+        <input id="survival-energy" type="range" min="0" max="80" value="15" />
+        <output id="survival-energy-value">15</output>
+      </div>
+      <div class="control-row">
+        <label for="divide-energy">Divide energy</label>
+        <input id="divide-energy" type="range" min="20" max="100" value="70" />
+        <output id="divide-energy-value">70</output>
+      </div>
+
+      <div class="color-row">
+        <label for="color-dead">Dead</label>
+        <input id="color-dead" type="color" value="#050508" />
+      </div>
+      <div class="color-row">
+        <label for="color-alive">Alive</label>
+        <input id="color-alive" type="color" value="#33cc44" />
+      </div>
+      <div class="color-row">
+        <label for="color-dividing">Dividing</label>
+        <input id="color-dividing" type="color" value="#ffff66" />
+      </div>
+    </div>
+  </body>
+</html>
