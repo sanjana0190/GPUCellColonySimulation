@@ -1,6 +1,9 @@
 /**
  * Loads an image URL into a GPU texture suitable for TEXTURE_BINDING + sampling.
- * Uses sRGB so PNG art displays with expected gamma.
+ *
+ * Uses rgba8unorm (not srgb) for maximum cross-browser compatibility — Safari
+ * has known issues with copyExternalImageToTexture + rgba8unorm-srgb on some
+ * versions. The visual difference for cell art is negligible.
  */
 export async function loadTextureFromUrl(
   device: GPUDevice,
@@ -12,7 +15,7 @@ export async function loadTextureFromUrl(
 
   const texture = device.createTexture({
     size: [bitmap.width, bitmap.height, 1],
-    format: 'rgba8unorm-srgb',
+    format: 'rgba8unorm',
     usage:
       GPUTextureUsage.TEXTURE_BINDING |
       GPUTextureUsage.COPY_DST |
@@ -20,9 +23,9 @@ export async function loadTextureFromUrl(
   });
 
   device.queue.copyExternalImageToTexture(
-    { source: bitmap },
-    { texture },
-    [bitmap.width, bitmap.height, 1],
+    { source: bitmap, flipY: false },
+    { texture, premultipliedAlpha: false },
+    [bitmap.width, bitmap.height],
   );
 
   bitmap.close();

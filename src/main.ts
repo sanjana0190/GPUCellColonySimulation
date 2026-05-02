@@ -85,8 +85,10 @@ async function main() {
   uploadSimulationParams();
 
   // Pipelines & vertex data.
+  // createComputePipeline is async so that WGSL compilation errors surface
+  // as rejected promises instead of silent no-ops.
   const renderPipeline = createPipeline(device, format);
-  const computePipeline = createComputePipeline(device, GRID_SIZE);
+  const computePipeline = await createComputePipeline(device, GRID_SIZE);
   const computeLayout = computePipeline.getBindGroupLayout(0);
   const renderLayout = renderPipeline.getBindGroupLayout(0);
 
