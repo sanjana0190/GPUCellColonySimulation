@@ -195,4 +195,30 @@ async function main() {
   requestAnimationFrame(frame);
 }
 
-main();
+main().catch((err: unknown) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  const isUnsupported =
+    msg.toLowerCase().includes('webgpu') ||
+    msg.toLowerCase().includes('adapter') ||
+    !navigator.gpu;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:#0a0a0f;
+    color:#fff; font-family:sans-serif; padding:2rem; text-align:center;
+  `;
+
+  overlay.innerHTML = isUnsupported
+    ? `<h2 style="margin:0 0 .75rem">WebGPU not supported</h2>
+       <p style="max-width:28rem;color:#aaa;margin:0">
+         This simulation requires WebGPU.<br><br>
+         <strong>Chrome 113+</strong> or <strong>Edge 113+</strong> on desktop work out of the box.<br>
+         <strong>Safari 18+</strong> on macOS Sequoia / iOS 18 also supports WebGPU —
+         make sure you are on the latest version.
+       </p>`
+    : `<h2 style="margin:0 0 .75rem">Initialisation error</h2>
+       <pre style="color:#f88;font-size:.8rem;white-space:pre-wrap">${msg}</pre>`;
+
+  document.body.appendChild(overlay);
+});
